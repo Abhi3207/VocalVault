@@ -17,6 +17,10 @@ build/
 venv/
 .venv/
 env/
+audio_env/
+
+# Downloaded data
+downloaded_audio/
 
 # IDE
 .vscode/
@@ -27,3 +31,7 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Auto-push automation
+auto_push.ps1
+auto_push.log

@@ -67,7 +67,7 @@ class AudioEmbedder:
         self._ensure_loaded()
 
         inputs = self._processor(
-            audios=waveform,
+            audio=waveform,
             sampling_rate=sr,
             return_tensors="pt",
             padding=True,
@@ -76,6 +76,12 @@ class AudioEmbedder:
 
         with torch.no_grad():
             feats = self._model.get_audio_features(**inputs)
+
+        # Handle both raw tensor and model output object
+        if hasattr(feats, 'pooler_output'):
+            feats = feats.pooler_output
+        elif hasattr(feats, 'last_hidden_state'):
+            feats = feats.last_hidden_state[:, 0, :]
 
         embedding = feats.squeeze(0).cpu().numpy().astype(np.float32)
 
@@ -102,7 +108,7 @@ class AudioEmbedder:
             sr = batch[0].sample_rate
 
             inputs = self._processor(
-                audios=waveforms,
+                audio=waveforms,
                 sampling_rate=sr,
                 return_tensors="pt",
                 padding=True,
@@ -111,6 +117,12 @@ class AudioEmbedder:
 
             with torch.no_grad():
                 feats = self._model.get_audio_features(**inputs)
+
+            # Handle both raw tensor and model output object
+            if hasattr(feats, 'pooler_output'):
+                feats = feats.pooler_output
+            elif hasattr(feats, 'last_hidden_state'):
+                feats = feats.last_hidden_state[:, 0, :]
 
             embeddings = feats.cpu().numpy().astype(np.float32)
 
