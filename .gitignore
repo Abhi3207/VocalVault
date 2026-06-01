@@ -1,9 +1,4 @@
 # data and model artifacts
-data/
-vectordb/
-models/
-snippets/
-queries/
 
 # Python
 __pycache__/
@@ -20,9 +15,9 @@ venv/
 env/
 audio_env/
 
-# Downloaded content & sample data
+# Large/downloaded media (exceeds GitHub 100MB limit)
 downloaded_audio/
-sample_queries/
+*.mp3
 
 # Logs
 *.log
