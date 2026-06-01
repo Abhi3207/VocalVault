@@ -11,6 +11,8 @@ Features:
 from __future__ import annotations
 
 import logging
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import gradio as gr
@@ -58,6 +60,30 @@ def _ingest(files) -> str:
     return summary
 
 
+def _save_query_io(query_audio_path: str, results: list) -> Path:
+    """Save query input and output snippets into a timestamped folder."""
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    query_dir = config.paths.queries_dir / timestamp
+    query_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save input audio
+    src = Path(query_audio_path)
+    dest_input = query_dir / f"query_input{src.suffix}"
+    shutil.copy2(str(src), str(dest_input))
+    logger.info("Saved query input → %s", dest_input)
+
+    # Save output snippets
+    for r in results:
+        if r.snippet_path and Path(r.snippet_path).exists():
+            dest_name = f"result_{r.rank}_{r.source_file}_{r.start_time:.1f}s-{r.end_time:.1f}s.wav"
+            # Sanitise filename (replace problematic characters)
+            dest_name = dest_name.replace(" ", "_").replace("/", "_").replace("\\", "_")
+            shutil.copy2(str(r.snippet_path), str(query_dir / dest_name))
+
+    logger.info("Saved %d result snippets → %s", len(results), query_dir)
+    return query_dir
+
+
 def _query(audio_file) -> list:
     """Handle an audio query — retrieve similar segments."""
     pipeline = get_pipeline()
@@ -86,7 +112,13 @@ def _query(audio_file) -> list:
             *[gr.update(visible=False, value="") for _ in range(5)],
         ]
 
-    status = f"### 🔊 Found {len(results)} matching segment(s)\n"
+    # Save query input + output together
+    saved_dir = _save_query_io(audio_file, results)
+
+    status = (
+        f"### 🔊 Found {len(results)} matching segment(s)\n"
+        f"💾 Saved to `{saved_dir.name}/`"
+    )
 
     audio_updates = []
     label_updates = []

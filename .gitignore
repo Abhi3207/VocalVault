@@ -3,6 +3,7 @@ data/
 vectordb/
 models/
 snippets/
+queries/
 
 # Python
 __pycache__/
@@ -17,6 +18,14 @@ build/
 venv/
 .venv/
 env/
+audio_env/
+
+# Downloaded content & sample data
+downloaded_audio/
+sample_queries/
+
+# Logs
+*.log
 
 # IDE
 .vscode/

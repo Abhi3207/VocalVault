@@ -19,9 +19,10 @@ class PathsConfig:
     vectordb_dir: Path = PROJECT_ROOT / "vectordb"
     models_dir: Path = PROJECT_ROOT / "models"
     snippets_dir: Path = PROJECT_ROOT / "snippets"   # extracted result snippets
+    queries_dir: Path = PROJECT_ROOT / "queries"     # saved query input + output pairs
 
     def __post_init__(self):
-        for d in (self.data_dir, self.vectordb_dir, self.models_dir, self.snippets_dir):
+        for d in (self.data_dir, self.vectordb_dir, self.models_dir, self.snippets_dir, self.queries_dir):
             d.mkdir(parents=True, exist_ok=True)
 
 
