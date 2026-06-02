@@ -50,6 +50,10 @@ class RetrieverConfig:
     """Retrieval settings."""
     top_k: int = 5
     distance_metric: str = "cosine"
+    over_fetch_factor: int = 3          # retrieve N× top_k, then deduplicate
+    max_distance: float = 0.85          # discard results above this cosine distance
+    merge_overlap_sec: float = 2.0      # merge results from same file within this gap
+    enable_text_query: bool = True      # allow text-to-audio search via CLAP
 
 
 @dataclass

@@ -89,21 +89,37 @@ class AudioVectorStore:
         self,
         embedding: np.ndarray,
         top_k: int | None = None,
+        where: dict | None = None,
     ) -> dict:
         """
         Find the closest audio segments to the given embedding.
+
+        Parameters
+        ----------
+        embedding : query vector (512-dim)
+        top_k : number of results to return
+        where : optional ChromaDB metadata filter, e.g.
+            {"source_file": "my_audio.wav"}
 
         Returns a dict with keys:
             ids, distances, metadatas  (each a list of length ≤ top_k).
         """
         self._ensure_ready()
         k = top_k or config.retriever.top_k
+        count = self._collection.count()
 
-        results = self._collection.query(
+        if count == 0:
+            return {"ids": [], "distances": [], "metadatas": []}
+
+        query_kwargs = dict(
             query_embeddings=[embedding.tolist()],
-            n_results=min(k, self._collection.count()),
+            n_results=min(k, count),
             include=["distances", "metadatas"],
         )
+        if where:
+            query_kwargs["where"] = where
+
+        results = self._collection.query(**query_kwargs)
 
         return {
             "ids": results["ids"][0] if results["ids"] else [],

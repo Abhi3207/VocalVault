@@ -131,6 +131,33 @@ class AudioRAGPipeline:
 
         return results
 
+    def query_text(
+        self,
+        text: str,
+        top_k: int | None = None,
+    ) -> list[RetrievalResult]:
+        """
+        Search the audio knowledge base using a text description.
+
+        Uses CLAP's text encoder to embed the query into the same
+        vector space, enabling cross-modal retrieval.
+
+        Parameters
+        ----------
+        text : natural-language description (e.g. "piano music")
+        top_k : max results to return
+
+        Returns
+        -------
+        list of RetrievalResult with extracted snippets.
+        """
+        results = self._retriever.retrieve_text(text, top_k=top_k)
+
+        if results:
+            results = self._retriever.extract_snippets(results)
+
+        return results
+
     # ═══════════════════════════════════════════════════════════════════
     #  Management
     # ═══════════════════════════════════════════════════════════════════

@@ -67,7 +67,7 @@ class AudioEmbedder:
         self._ensure_loaded()
 
         inputs = self._processor(
-            audios=waveform,
+            audio=waveform,
             sampling_rate=sr,
             return_tensors="pt",
             padding=True,
@@ -102,7 +102,7 @@ class AudioEmbedder:
             sr = batch[0].sample_rate
 
             inputs = self._processor(
-                audios=waveforms,
+                audio=waveforms,
                 sampling_rate=sr,
                 return_tensors="pt",
                 padding=True,
@@ -127,6 +127,42 @@ class AudioEmbedder:
             )
 
         return all_embeddings
+
+    def embed_text(self, text: str) -> np.ndarray:
+        """
+        Embed a text description into the same 512-dim space as audio.
+
+        CLAP was trained on audio–text pairs, so text embeddings are
+        directly comparable to audio embeddings via cosine similarity.
+
+        Parameters
+        ----------
+        text : natural-language description (e.g. "piano music", "Telugu speech")
+
+        Returns
+        -------
+        np.ndarray of shape (512,) — L2-normalised embedding.
+        """
+        self._ensure_loaded()
+
+        inputs = self._processor(
+            text=[text],
+            return_tensors="pt",
+            padding=True,
+        )
+        inputs = {k: v.to(self._device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            feats = self._model.get_text_features(**inputs)
+
+        embedding = feats.squeeze(0).cpu().numpy().astype(np.float32)
+
+        if config.embedding.normalize:
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = embedding / norm
+
+        return embedding
 
     @property
     def dimension(self) -> int:
