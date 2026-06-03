@@ -9,6 +9,7 @@ Improvements over naive top-k retrieval:
   • Filter results by maximum distance threshold
   • Multi-scale query embedding for long audio queries
   • Cached file loading during snippet extraction
+  • Distance-to-similarity conversion for display
 """
 
 from __future__ import annotations
@@ -29,6 +30,20 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  Helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+def distance_to_similarity(distance: float) -> float:
+    """
+    Convert cosine distance to a similarity percentage.
+
+    Cosine distance ranges from 0 (identical) to 2 (opposite).
+    We map this to 100% (identical) → 0% (opposite).
+    """
+    return round(max(0.0, (1.0 - distance)) * 100, 1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  Result container
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -42,6 +57,16 @@ class RetrievalResult:
     distance: float
     snippet_path: Path | None = None   # path to extracted WAV snippet
     merged_count: int = 1              # how many raw segments were merged
+
+    @property
+    def similarity_pct(self) -> float:
+        """Similarity as a percentage (100% = identical)."""
+        return distance_to_similarity(self.distance)
+
+    @property
+    def duration(self) -> float:
+        """Duration of this result segment in seconds."""
+        return round(self.end_time - self.start_time, 2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -84,7 +109,15 @@ class AudioRetriever:
         then merges and deduplicates all candidates.
 
         Returns a list of RetrievalResult sorted by relevance (best first).
+
+        Raises
+        ------
+        ValueError
+            If the query waveform is empty.
         """
+        if query_waveform is None or len(query_waveform) == 0:
+            raise ValueError("Cannot retrieve with an empty query waveform")
+
         k = top_k or config.retriever.top_k
         fetch_k = k * config.retriever.over_fetch_factor
         query_duration = len(query_waveform) / sr

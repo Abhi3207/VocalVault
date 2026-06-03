@@ -36,11 +36,17 @@ class AudioVectorStore:
             return
 
         logger.info("Opening ChromaDB at %s", self._persist_dir)
-        self._client = chromadb.PersistentClient(path=self._persist_dir)
-        self._collection = self._client.get_or_create_collection(
-            name=self.COLLECTION_NAME,
-            metadata={"hnsw:space": config.retriever.distance_metric},
-        )
+        try:
+            self._client = chromadb.PersistentClient(path=self._persist_dir)
+            self._collection = self._client.get_or_create_collection(
+                name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": config.retriever.distance_metric},
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to initialise ChromaDB at '{self._persist_dir}': {exc}"
+            ) from exc
+
         logger.info(
             "Collection '%s' ready — %d existing documents",
             self.COLLECTION_NAME,
@@ -74,11 +80,16 @@ class AudioVectorStore:
         # ChromaDB accepts plain lists
         emb_lists = [e.tolist() for e in embeddings]
 
-        self._collection.upsert(
-            ids=ids,
-            embeddings=emb_lists,
-            metadatas=metadatas,
-        )
+        try:
+            self._collection.upsert(
+                ids=ids,
+                embeddings=emb_lists,
+                metadatas=metadatas,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to upsert {len(ids)} segments into ChromaDB: {exc}"
+            ) from exc
 
         logger.info("Upserted %d segments into vector store", len(ids))
         return len(ids)
@@ -119,7 +130,11 @@ class AudioVectorStore:
         if where:
             query_kwargs["where"] = where
 
-        results = self._collection.query(**query_kwargs)
+        try:
+            results = self._collection.query(**query_kwargs)
+        except Exception as exc:
+            logger.error("ChromaDB query failed: %s", exc)
+            return {"ids": [], "distances": [], "metadatas": []}
 
         return {
             "ids": results["ids"][0] if results["ids"] else [],
@@ -142,6 +157,32 @@ class AudioVectorStore:
         all_meta = self._collection.get(include=["metadatas"])
         sources = sorted({m["source_file"] for m in all_meta["metadatas"]})
         return sources
+
+    def delete_source(self, source_file: str) -> int:
+        """
+        Delete all segments belonging to a specific source file.
+
+        Returns the number of segments deleted.
+        """
+        self._ensure_ready()
+
+        # Find all IDs for this source
+        all_data = self._collection.get(
+            where={"source_file": source_file},
+            include=["metadatas"],
+        )
+        ids_to_delete = all_data["ids"]
+
+        if not ids_to_delete:
+            logger.info("No segments found for source '%s'", source_file)
+            return 0
+
+        self._collection.delete(ids=ids_to_delete)
+        logger.info(
+            "Deleted %d segments for source '%s'",
+            len(ids_to_delete), source_file,
+        )
+        return len(ids_to_delete)
 
     def clear_all(self):
         """Delete the entire collection and recreate it."""

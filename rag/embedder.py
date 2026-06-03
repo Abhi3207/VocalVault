@@ -63,7 +63,20 @@ class AudioEmbedder:
         Returns
         -------
         np.ndarray of shape (512,) — L2-normalised embedding.
+
+        Raises
+        ------
+        ValueError
+            If the waveform is empty or too short to embed.
         """
+        if waveform is None or len(waveform) == 0:
+            raise ValueError("Cannot embed an empty waveform")
+        if len(waveform) < sr * 0.1:
+            raise ValueError(
+                f"Waveform too short to embed ({len(waveform) / sr:.3f}s). "
+                "Minimum ~0.1s required."
+            )
+
         self._ensure_loaded()
 
         inputs = self._processor(
@@ -74,7 +87,7 @@ class AudioEmbedder:
         )
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
-        with torch.no_grad():
+        with torch.inference_mode():
             feats = self._model.get_audio_features(**inputs)
 
         embedding = feats.squeeze(0).cpu().numpy().astype(np.float32)
@@ -92,6 +105,9 @@ class AudioEmbedder:
 
         Returns a list of 512-dim numpy arrays (one per segment).
         """
+        if not segments:
+            return []
+
         self._ensure_loaded()
         batch_size = config.embedding.batch_size
         all_embeddings: list[np.ndarray] = []
@@ -109,7 +125,7 @@ class AudioEmbedder:
             )
             inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 feats = self._model.get_audio_features(**inputs)
 
             embeddings = feats.cpu().numpy().astype(np.float32)
@@ -143,6 +159,9 @@ class AudioEmbedder:
         -------
         np.ndarray of shape (512,) — L2-normalised embedding.
         """
+        if not text or not text.strip():
+            raise ValueError("Cannot embed empty text")
+
         self._ensure_loaded()
 
         inputs = self._processor(
@@ -152,7 +171,7 @@ class AudioEmbedder:
         )
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
 
-        with torch.no_grad():
+        with torch.inference_mode():
             feats = self._model.get_text_features(**inputs)
 
         embedding = feats.squeeze(0).cpu().numpy().astype(np.float32)

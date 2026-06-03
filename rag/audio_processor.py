@@ -6,10 +6,12 @@ Handles:
   • Resampling to the target sample rate
   • Splitting into fixed-duration overlapping segments
   • Exporting individual segments to WAV files
+  • LRU caching of loaded audio to avoid redundant I/O
 """
 
 from __future__ import annotations
 
+import functools
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,20 +51,15 @@ class AudioSegment:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Loading
+#  Loading (with optional LRU cache)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def load_audio(
-    path: str | Path,
-    sr: int | None = None,
+def _load_audio_uncached(
+    path_str: str,
+    sr: int,
 ) -> tuple[np.ndarray, int]:
-    """
-    Load an audio file and resample to *sr* (defaults to config sample rate).
-
-    Returns (waveform, sample_rate) where waveform is a 1-D float32 array.
-    """
-    sr = sr or config.audio.sample_rate
-    path = Path(path)
+    """Internal loader — always hits disk."""
+    path = Path(path_str)
 
     if not path.exists():
         raise FileNotFoundError(f"Audio file not found: {path}")
@@ -75,16 +72,67 @@ def load_audio(
         )
 
     logger.info("Loading audio: %s  (target sr=%d)", path.name, sr)
-    waveform, actual_sr = librosa.load(str(path), sr=sr, mono=True)
+    try:
+        waveform, actual_sr = librosa.load(str(path), sr=sr, mono=True)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to decode audio file '{path.name}': {exc}"
+        ) from exc
+
     waveform = waveform.astype(np.float32)
+    duration = len(waveform) / actual_sr
+
+    # Validate duration
+    if duration < 0.1:
+        logger.warning("Audio file '%s' is very short (%.3f s)", path.name, duration)
+    elif duration > 7200:
+        logger.warning(
+            "Audio file '%s' is very long (%.0f s / %.1f hrs) — "
+            "ingestion may be slow",
+            path.name, duration, duration / 3600,
+        )
 
     logger.info(
         "  → %s loaded: %.2f s, %d samples",
-        path.name,
-        len(waveform) / actual_sr,
-        len(waveform),
+        path.name, duration, len(waveform),
     )
     return waveform, actual_sr
+
+
+@functools.lru_cache(maxsize=config.audio.max_audio_cache)
+def _load_audio_cached(
+    path_str: str,
+    sr: int,
+) -> tuple[np.ndarray, int]:
+    """LRU-cached audio loader.  Cache key = (resolved path, sample rate)."""
+    return _load_audio_uncached(path_str, sr)
+
+
+def load_audio(
+    path: str | Path,
+    sr: int | None = None,
+) -> tuple[np.ndarray, int]:
+    """
+    Load an audio file and resample to *sr* (defaults to config sample rate).
+
+    Returns (waveform, sample_rate) where waveform is a 1-D float32 array.
+
+    When `config.audio.cache_loaded_audio` is True, results are LRU-cached
+    so repeated loads of the same file (e.g. during snippet extraction)
+    skip disk I/O.
+    """
+    sr = sr or config.audio.sample_rate
+    path_str = str(Path(path).resolve())
+
+    if config.audio.cache_loaded_audio:
+        return _load_audio_cached(path_str, sr)
+    return _load_audio_uncached(path_str, sr)
+
+
+def clear_audio_cache():
+    """Flush the audio LRU cache (useful after clearing the KB)."""
+    _load_audio_cached.cache_clear()
+    logger.debug("Audio LRU cache cleared")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

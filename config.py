@@ -4,12 +4,28 @@ All paths, model names, and hyperparameters are defined here.
 """
 
 import os
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import torch
+
+logger = logging.getLogger(__name__)
 
 # ── Project root ────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def auto_device() -> str:
+    """Detect the best available compute device (cuda > mps > cpu)."""
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = "mps"
+    else:
+        device = "cpu"
+    logger.info("Auto-detected compute device: %s", device)
+    return device
 
 
 @dataclass
@@ -33,6 +49,8 @@ class AudioConfig:
     segment_duration: float = 10.0     # seconds per chunk
     segment_overlap: float = 2.0       # overlap between consecutive chunks
     supported_extensions: tuple = (".wav", ".mp3", ".flac", ".ogg", ".m4a")
+    cache_loaded_audio: bool = True    # LRU-cache loaded audio files
+    max_audio_cache: int = 8           # max files in the audio LRU cache
 
 
 @dataclass
@@ -42,7 +60,11 @@ class EmbeddingConfig:
     dimension: int = 512
     batch_size: int = 8
     normalize: bool = True
-    device: str = "cpu"                # "cuda" if GPU available
+    device: str = ""                   # empty string → auto-detect at startup
+
+    def __post_init__(self):
+        if not self.device:
+            self.device = auto_device()
 
 
 @dataclass
