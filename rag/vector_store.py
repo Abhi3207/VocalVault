@@ -80,12 +80,16 @@ class AudioVectorStore:
         # ChromaDB accepts plain lists
         emb_lists = [e.tolist() for e in embeddings]
 
+        # Batch upserts to avoid ChromaDB performance issues with large payloads
+        batch_size = 500
         try:
-            self._collection.upsert(
-                ids=ids,
-                embeddings=emb_lists,
-                metadatas=metadatas,
-            )
+            for start in range(0, len(ids), batch_size):
+                end = start + batch_size
+                self._collection.upsert(
+                    ids=ids[start:end],
+                    embeddings=emb_lists[start:end],
+                    metadatas=metadatas[start:end],
+                )
         except Exception as exc:
             raise RuntimeError(
                 f"Failed to upsert {len(ids)} segments into ChromaDB: {exc}"

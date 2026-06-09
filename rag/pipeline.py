@@ -110,24 +110,34 @@ class AudioRAGPipeline:
                 "skipped": False,
             }
 
-        # 3. Embed
-        _progress(3, 4, f"Embedding {len(segments)} segments…")
-        embeddings = self._embedder.embed_batch(segments)
+        # 3. Embed + 4. Store  (rolled back on failure)
+        try:
+            _progress(3, 4, f"Embedding {len(segments)} segments…")
+            embeddings = self._embedder.embed_batch(segments)
 
-        # 4. Store
-        _progress(4, 4, "Storing in vector database…")
-        ids = [seg.uid for seg in segments]
-        metadatas = [
-            {
-                "source_file": seg.source_file,
-                "start_time": seg.start_time,
-                "end_time": seg.end_time,
-                "chunk_index": seg.chunk_index,
-                "duration": seg.duration,
-            }
-            for seg in segments
-        ]
-        self._store.add_segments(ids, embeddings, metadatas)
+            _progress(4, 4, "Storing in vector database…")
+            ids = [seg.uid for seg in segments]
+            metadatas = [
+                {
+                    "source_file": seg.source_file,
+                    "start_time": seg.start_time,
+                    "end_time": seg.end_time,
+                    "chunk_index": seg.chunk_index,
+                    "duration": seg.duration,
+                }
+                for seg in segments
+            ]
+            self._store.add_segments(ids, embeddings, metadatas)
+        except Exception:
+            # Roll back the data-dir copy so the file isn't left in a
+            # half-ingested state (present on disk, absent from the store).
+            if dest.exists():
+                dest.unlink()
+                logger.warning(
+                    "Rolled back data copy for '%s' after ingestion failure",
+                    audio_path.name,
+                )
+            raise
 
         elapsed = round(time.perf_counter() - t0, 2)
         logger.info(

@@ -300,29 +300,27 @@ class AudioRetriever:
             file_results.sort(key=lambda r: r.start_time)
 
             current = file_results[0]
-            merge_count = 1
+            current_merge_count = 1
 
             for nxt in file_results[1:]:
                 # Check if next segment overlaps or is within the gap
                 if nxt.start_time <= current.end_time + gap:
                     # Merge: extend time range, keep best distance
+                    current_merge_count += 1
                     current = RetrievalResult(
                         rank=0,
                         source_file=source_file,
                         start_time=current.start_time,
                         end_time=max(current.end_time, nxt.end_time),
                         distance=min(current.distance, nxt.distance),
-                        merged_count=merge_count + 1,
+                        merged_count=current_merge_count,
                     )
-                    merge_count += 1
                 else:
                     # No overlap — emit current, start new
-                    current.merged_count = merge_count
                     merged.append(current)
                     current = nxt
-                    merge_count = 1
+                    current_merge_count = 1
 
-            current.merged_count = merge_count
             merged.append(current)
 
         # Sort by distance (best first)

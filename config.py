@@ -58,9 +58,9 @@ class EmbeddingConfig:
     """CLAP audio embedding model settings."""
     model_name: str = "laion/larger_clap_music_and_speech"
     dimension: int = 512
-    batch_size: int = 8
+    batch_size: int = int(os.environ.get("VOCALVAULT_BATCH_SIZE", "8"))
     normalize: bool = True
-    device: str = ""                   # empty string → auto-detect at startup
+    device: str = os.environ.get("VOCALVAULT_DEVICE", "")  # empty → auto-detect
 
     def __post_init__(self):
         if not self.device:
@@ -86,10 +86,10 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     retriever: RetrieverConfig = field(default_factory=RetrieverConfig)
 
-    # Gradio
+    # Gradio (overridable via VOCALVAULT_PORT / VOCALVAULT_SHARE env vars)
     server_host: str = "0.0.0.0"
-    server_port: int = 7861
-    share: bool = False
+    server_port: int = int(os.environ.get("VOCALVAULT_PORT", "7861"))
+    share: bool = os.environ.get("VOCALVAULT_SHARE", "").lower() in ("1", "true", "yes")
 
 
 # ── Singleton instance ──────────────────────────────────────────────────────

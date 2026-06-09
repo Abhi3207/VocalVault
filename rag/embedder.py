@@ -10,6 +10,7 @@ together, enabling audio-to-audio retrieval via cosine similarity.
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -36,6 +37,13 @@ class AudioEmbedder:
         self._device = device or config.embedding.device
         self._model: ClapModel | None = None
         self._processor: ClapProcessor | None = None
+
+    def __repr__(self) -> str:
+        loaded = self._model is not None
+        return (
+            f"AudioEmbedder(model={self._model_name!r}, "
+            f"device={self._device!r}, loaded={loaded})"
+        )
 
     # ── Lazy initialisation ────────────────────────────────────────────
 
@@ -111,6 +119,7 @@ class AudioEmbedder:
         self._ensure_loaded()
         batch_size = config.embedding.batch_size
         all_embeddings: list[np.ndarray] = []
+        t0 = time.perf_counter()
 
         for i in range(0, len(segments), batch_size):
             batch = segments[i : i + batch_size]
@@ -130,6 +139,10 @@ class AudioEmbedder:
 
             embeddings = feats.cpu().numpy().astype(np.float32)
 
+            # Free GPU memory between batches to prevent OOM on large ingests
+            if self._device == "cuda":
+                torch.cuda.empty_cache()
+
             if config.embedding.normalize:
                 norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
                 norms = np.where(norms > 0, norms, 1.0)
@@ -142,6 +155,12 @@ class AudioEmbedder:
                 i, min(i + batch_size, len(segments)), len(segments),
             )
 
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "Embedded %d segments in %.2f s (%.1f seg/s)",
+            len(segments), elapsed,
+            len(segments) / elapsed if elapsed > 0 else 0,
+        )
         return all_embeddings
 
     def embed_text(self, text: str) -> np.ndarray:

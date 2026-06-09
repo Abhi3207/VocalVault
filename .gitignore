@@ -31,10 +31,12 @@ downloaded_audio/
 
 # Logs
 *.log
+auto_push.log
 
 # IDE
 .vscode/
 .idea/
+.gemini/
 *.swp
 *.swo
 

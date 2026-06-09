@@ -79,6 +79,22 @@ All settings in `config.py`:
 | `retriever.top_k` | `5` | Number of results to return |
 | `retriever.max_distance` | `0.85` | Cosine distance threshold |
 
+## Environment Variables
+
+Override key settings without editing `config.py`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `VOCALVAULT_DEVICE` | auto-detect | Force compute device: `cuda`, `mps`, or `cpu` |
+| `VOCALVAULT_PORT` | `7861` | Gradio server port |
+| `VOCALVAULT_SHARE` | `false` | Set to `1` or `true` to create a public Gradio link |
+| `VOCALVAULT_BATCH_SIZE` | `8` | Embedding batch size (lower if GPU OOM) |
+
+```bash
+# Example: run on CPU with a public link
+VOCALVAULT_DEVICE=cpu VOCALVAULT_SHARE=true python app.py
+```
+
 ## Key Design Decisions
 
 - **No speech-to-text** — Works purely with audio embeddings. Useful for music, environmental sounds, speaker similarity, and any domain where transcription is unwanted.
