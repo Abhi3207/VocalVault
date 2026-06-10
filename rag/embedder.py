@@ -205,3 +205,8 @@ class AudioEmbedder:
     @property
     def dimension(self) -> int:
         return config.embedding.dimension
+
+    @property
+    def is_loaded(self) -> bool:
+        """Whether the CLAP model is currently loaded in memory."""
+        return self._model is not None
